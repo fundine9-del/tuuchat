@@ -6,6 +6,14 @@ import type {
   CallInitiate,
   CallSdp,
   CallUpdate,
+  LiveEnded,
+  LiveHostAnswer,
+  LiveIce,
+  LiveJoined,
+  LiveNoSuch,
+  LiveSession,
+  LiveViewerCount,
+  LiveWatchOffer,
   Message,
   PresenceUpdate,
   Status,
@@ -31,6 +39,14 @@ type EventMap = {
   callOffer: (c: CallSdp) => void
   callAnswer: (c: CallSdp) => void
   callIce: (c: CallIce) => void
+  liveStarted: (l: LiveSession) => void
+  liveEnded: (l: LiveEnded) => void
+  liveViewerCount: (l: LiveViewerCount) => void
+  liveJoined: (l: LiveJoined) => void
+  liveNoSuch: (l: LiveNoSuch) => void
+  liveWatchOffer: (l: LiveWatchOffer) => void
+  liveHostAnswer: (l: LiveHostAnswer) => void
+  liveIce: (l: LiveIce) => void
 }
 
 const listeners: { [K in keyof EventMap]: Set<EventMap[K]> } = {
@@ -51,6 +67,14 @@ const listeners: { [K in keyof EventMap]: Set<EventMap[K]> } = {
   callOffer: new Set(),
   callAnswer: new Set(),
   callIce: new Set(),
+  liveStarted: new Set(),
+  liveEnded: new Set(),
+  liveViewerCount: new Set(),
+  liveJoined: new Set(),
+  liveNoSuch: new Set(),
+  liveWatchOffer: new Set(),
+  liveHostAnswer: new Set(),
+  liveIce: new Set(),
 }
 
 let socket: Socket | null = null
@@ -86,6 +110,14 @@ export function connectSocket(token: string) {
   socket.on('call:offer', (c: CallSdp) => dispatch('callOffer', c))
   socket.on('call:answer', (c: CallSdp) => dispatch('callAnswer', c))
   socket.on('call:ice', (c: CallIce) => dispatch('callIce', c))
+  socket.on('live:started', (l: LiveSession) => dispatch('liveStarted', l))
+  socket.on('live:ended', (l: LiveEnded) => dispatch('liveEnded', l))
+  socket.on('live:viewer-count', (l: LiveViewerCount) => dispatch('liveViewerCount', l))
+  socket.on('live:joined', (l: LiveJoined) => dispatch('liveJoined', l))
+  socket.on('live:no-such', (l: LiveNoSuch) => dispatch('liveNoSuch', l))
+  socket.on('live:watch-offer', (l: LiveWatchOffer) => dispatch('liveWatchOffer', l))
+  socket.on('live:host-answer', (l: LiveHostAnswer) => dispatch('liveHostAnswer', l))
+  socket.on('live:ice', (l: LiveIce) => dispatch('liveIce', l))
   socket.on('connect_error', (e) => console.warn('[socket]', e.message))
 
   return socket
@@ -101,6 +133,10 @@ export function emitTyping(conversationId: string, isTyping: boolean) {
 }
 
 export function emitCall(event: string, payload: Record<string, unknown>) {
+  socket?.emit(event, payload)
+}
+
+export function emitLive(event: string, payload: Record<string, unknown>) {
   socket?.emit(event, payload)
 }
 

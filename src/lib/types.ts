@@ -124,3 +124,55 @@ export interface CallUpdate {
   callId: string
   to: string
 }
+
+/* --------------------------- live broadcast --------------------------- */
+
+export interface LiveSession {
+  id: string
+  host_id: string
+  title: string
+  started_at: string
+  host: {
+    id: string
+    username: string
+    display_name: string
+    avatar_url: string | null
+  }
+  viewer_count: number
+}
+
+export interface LiveEnded {
+  liveId: string
+}
+
+export interface LiveViewerCount {
+  liveId: string
+  viewers: number
+}
+
+export interface LiveJoined {
+  liveId: string
+  viewers: number
+}
+
+export interface LiveNoSuch {
+  liveId: string
+}
+
+export interface LiveWatchOffer {
+  liveId: string
+  sdp: RTCSessionDescriptionInit
+  viewerSocketId: string
+}
+
+export interface LiveHostAnswer {
+  liveId: string
+  sdp: RTCSessionDescriptionInit
+}
+
+export interface LiveIce {
+  liveId: string
+  candidate: RTCIceCandidateInit
+  to: 'host' | 'viewer'
+  viewerSocketId?: string
+}

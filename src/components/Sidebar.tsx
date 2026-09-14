@@ -4,6 +4,7 @@ import { LogOut, MessageSquarePlus, PenLine, Search } from 'lucide-react'
 import Avatar from './Avatar'
 import NewChatModal from './NewChatModal'
 import StatusPanel from './StatusPanel'
+import LivePanel from './LivePanel'
 import { conversationsApi } from '../lib/api'
 import { useAuth } from '../lib/auth-context'
 import { subscribe } from '../lib/socket'
@@ -111,6 +112,9 @@ export default function Sidebar() {
 
       {/* statuses */}
       <StatusPanel />
+
+      {/* live */}
+      <LivePanel />
 
       {/* conversation list */}
       <div className="flex-1 overflow-y-auto px-2">

@@ -6,12 +6,15 @@ import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Home from './pages/Home'
 import ChatPage from './pages/Chat'
+import LiveView from './pages/LiveView'
 import Profile from './pages/Profile'
 
 function HomeLayout() {
   const location = useLocation()
-  // on small screens show either the conversation list or the active view
-  const inPanel = location.pathname === '/profile' || location.pathname.startsWith('/chat/')
+  const inPanel =
+    location.pathname === '/profile' ||
+    location.pathname.startsWith('/chat/') ||
+    location.pathname.startsWith('/live/')
 
   return (
     <div className="flex h-screen overflow-hidden bg-gradient-to-br from-white via-pink-50 to-pink-100">
@@ -41,6 +44,7 @@ export default function App() {
         >
           <Route index element={<Home />} />
           <Route path="chat/:id" element={<ChatPage />} />
+          <Route path="live/:id" element={<LiveView />} />
           <Route path="profile" element={<Profile />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
