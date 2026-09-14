@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { LogOut, MessageSquarePlus, PenLine, Search } from 'lucide-react'
 import Avatar from './Avatar'
 import NewChatModal from './NewChatModal'
@@ -15,6 +15,7 @@ import { formatTime } from '../lib/utils'
 export default function Sidebar() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const { id: activeId } = useParams()
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [query, setQuery] = useState('')
@@ -79,6 +80,11 @@ export default function Sidebar() {
   }, [conversations, query])
 
   if (!user) return null
+
+  // the me-row sits at the very bottom, so leave room for the bottom nav on
+  // the three tab screens (chat/live-watch hide the nav)
+  const navVisible =
+    location.pathname === '/' || location.pathname === '/live' || location.pathname === '/profile'
 
   return (
     <aside className="flex h-full w-full flex-col border-r border-pink-100 bg-white/70 backdrop-blur-xl sm:w-80">
@@ -146,7 +152,7 @@ export default function Sidebar() {
       </div>
 
       {/* me */}
-      <div className="flex items-center gap-3 border-t border-pink-100 p-3">
+      <div className={`flex items-center gap-3 border-t border-pink-100 p-3 ${navVisible ? 'pb-[72px]' : ''}`}>
         <button onClick={() => navigate('/profile')} className="flex min-w-0 flex-1 items-center gap-3">
           <Avatar name={user.display_name} src={user.avatar_url} size={40} online={user.status === 'online'} showStatus />
           <div className="min-w-0">

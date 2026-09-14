@@ -80,7 +80,7 @@ export default function Profile() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-xl px-6 py-8">
+      <div className="mx-auto max-w-xl px-6 pb-28 pt-8">
         <h1 className="mb-8 text-2xl font-bold text-slate-800">Profile</h1>
 
         {/* avatar */}
