@@ -114,6 +114,29 @@ async function main() {
   assert(await videoOk.jsonValue(), 'viewer has host video stream')
   console.log('OK viewer receives host video/audio stream')
 
+  /* --- live comments: host -> viewer --- */
+  await host.getByPlaceholder('Say something…').fill('Hello live viewers!')
+  await host.getByRole('button', { name: 'Send comment' }).click()
+  await viewer.getByText('Hello live viewers!').waitFor({ timeout: 10000 })
+  console.log('OK viewer sees host comment')
+
+  /* --- live comments: viewer -> host --- */
+  await viewer.getByPlaceholder('Say something…').fill('Hey host! 👋')
+  await viewer.getByRole('button', { name: 'Send comment' }).click()
+  await host.getByText('Hey host! 👋').waitFor({ timeout: 10000 })
+  console.log('OK host sees viewer comment')
+
+  /* --- comment history REST endpoint --- */
+  const viewerToken = await viewer.evaluate(() => localStorage.getItem('tuuchat:token'))
+  const liveId = new URL(viewer.url()).pathname.split('/').pop()
+  const history = await api(`/api/live/${liveId}/comments?limit=50`, { token: viewerToken! })
+  const contents = (history.comments as { content: string }[]).map((c) => c.content)
+  assert(
+    contents.includes('Hello live viewers!') && contents.includes('Hey host! 👋'),
+    `comment history has both comments (got ${JSON.stringify(contents)})`,
+  )
+  console.log('OK comment history REST endpoint returns both')
+
   /* --- viewer count reaches host --- */
   const countOnHost = await host
     .locator('div.rounded-full.bg-white\\/20')

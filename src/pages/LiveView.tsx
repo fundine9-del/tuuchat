@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, Loader2, PhoneOff, Radio, Users } from 'lucide-react'
 import Avatar from '../components/Avatar'
+import LiveComments from '../components/LiveComments'
 import { liveManager, type LiveSnapshot } from '../lib/live'
 import type { LiveSession } from '../lib/types'
 import { useAuth } from '../lib/auth-context'
@@ -126,6 +127,9 @@ export default function LiveView() {
           </div>
         </div>
       )}
+
+      {/* live comments */}
+      {!ended && (amHost || isViewing) && <LiveComments />}
 
       {/* bottom controls */}
       {!ended && (amHost || isViewing) && (

@@ -1,4 +1,4 @@
-import type { Conversation, LastMessage, LiveSession, Message, Participant, Status, User, UserStatus } from './types'
+import type { Conversation, LastMessage, LiveComment, LiveSession, Message, Participant, Status, User, UserStatus } from './types'
 
 export const API_BASE =
   (import.meta.env.VITE_API_URL as string | undefined) ?? 'https://tuuchat-server-production.up.railway.app'
@@ -163,4 +163,6 @@ export const livesApi = {
   start: (title: string) =>
     request<{ live: LiveSession }>('/api/live/start', { method: 'POST', body: { title } }),
   end: (id: string) => request<{ ended: string }>(`/api/live/${id}/end`, { method: 'POST' }),
+  comments: (id: string, limit = 50) =>
+    request<{ comments: LiveComment[] }>(`/api/live/${id}/comments?limit=${limit}`),
 }

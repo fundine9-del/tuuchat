@@ -6,6 +6,7 @@ import type {
   CallInitiate,
   CallSdp,
   CallUpdate,
+  LiveComment,
   LiveEnded,
   LiveHostAnswer,
   LiveIce,
@@ -47,6 +48,7 @@ type EventMap = {
   liveWatchOffer: (l: LiveWatchOffer) => void
   liveHostAnswer: (l: LiveHostAnswer) => void
   liveIce: (l: LiveIce) => void
+  liveComment: (l: LiveComment) => void
 }
 
 const listeners: { [K in keyof EventMap]: Set<EventMap[K]> } = {
@@ -75,6 +77,7 @@ const listeners: { [K in keyof EventMap]: Set<EventMap[K]> } = {
   liveWatchOffer: new Set(),
   liveHostAnswer: new Set(),
   liveIce: new Set(),
+  liveComment: new Set(),
 }
 
 let socket: Socket | null = null
@@ -118,6 +121,9 @@ export function connectSocket(token: string) {
   socket.on('live:watch-offer', (l: LiveWatchOffer) => dispatch('liveWatchOffer', l))
   socket.on('live:host-answer', (l: LiveHostAnswer) => dispatch('liveHostAnswer', l))
   socket.on('live:ice', (l: LiveIce) => dispatch('liveIce', l))
+  socket.on('live:comment', (d: { liveId: string; comment: LiveComment }) => {
+    if (d?.comment) dispatch('liveComment', d.comment)
+  })
   socket.on('connect_error', (e) => console.warn('[socket]', e.message))
 
   return socket

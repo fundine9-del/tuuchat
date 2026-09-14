@@ -1,6 +1,6 @@
 import { livesApi } from './api'
 import { emitLive, subscribe } from './socket'
-import type { LiveSession } from './types'
+import type { LiveComment, LiveSession } from './types'
 
 const RTC_CONFIG: RTCConfiguration = {
   iceServers: [
@@ -17,6 +17,7 @@ export interface LiveSnapshot {
   localStream: MediaStream | null
   remoteStream: MediaStream | null
   viewers: number
+  comments: LiveComment[]
   notice: string | null
 }
 
@@ -27,6 +28,7 @@ function idleSnapshot(): LiveSnapshot {
     localStream: null,
     remoteStream: null,
     viewers: 0,
+    comments: [],
     notice: null,
   }
 }
@@ -79,6 +81,11 @@ class LiveManager {
       }
     })
 
+    subscribe('liveComment', (comment) => {
+      if (this.state.live?.id !== comment.liveId) return
+      this.mutate({ comments: [...this.state.comments, comment] })
+    })
+
     subscribe('liveEnded', ({ liveId }) => {
       if (this.state.live?.id !== liveId) return
       if (this.state.stage === 'watching' || this.state.stage === 'joining') {
@@ -127,7 +134,7 @@ class LiveManager {
         this.setNotice('Could not start your live')
         return null
       }
-      this.mutate({ stage: 'live', live, localStream: local, viewers: 0 })
+      this.mutate({ stage: 'live', live, localStream: local, viewers: 0, comments: [] })
       return live
     } catch {
       this.setNotice('Could not access camera / microphone')
@@ -174,7 +181,8 @@ class LiveManager {
 
   async join(live: LiveSession) {
     if (this.state.stage !== 'idle' && this.state.stage !== 'ended') return
-    this.mutate({ stage: 'joining', live, remoteStream: null, viewers: live.viewer_count })
+    this.mutate({ stage: 'joining', live, remoteStream: null, viewers: live.viewer_count, comments: [] })
+    void this.loadComments()
     try {
       const pc = new RTCPeerConnection(RTC_CONFIG)
       this.viewerPc = pc
@@ -223,6 +231,26 @@ class LiveManager {
     }
     this.cleanupLive()
     this.mutate({ stage: 'ended', notice: 'You ended your live' })
+  }
+
+  /* ---------------------------- live comments ---------------------------- */
+
+  async sendComment(content: string) {
+    const text = content.trim().slice(0, 500)
+    const live = this.state.live
+    if (!text || !live || (this.state.stage !== 'live' && this.state.stage !== 'watching')) return
+    emitLive('live:comment', { liveId: live.id, content: text })
+  }
+
+  async loadComments() {
+    const live = this.state.live
+    if (!live) return
+    try {
+      const { comments } = await livesApi.comments(live.id, 50)
+      this.mutate({ comments })
+    } catch {
+      /* ignore */
+    }
   }
 
   /* ---------------------------- cleanup ---------------------------- */

@@ -141,6 +141,16 @@ export interface LiveSession {
   viewer_count: number
 }
 
+export interface LiveComment {
+  id: string
+  liveId: string
+  userId: string
+  displayName: string
+  avatarUrl: string | null
+  content: string
+  createdAt: string
+}
+
 export interface LiveEnded {
   liveId: string
 }
