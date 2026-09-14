@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, Loader2, PhoneOff, Radio, Users } from 'lucide-react'
+import { ArrowLeft, Heart, Loader2, PhoneOff, Radio, Share2, Users } from 'lucide-react'
 import Avatar from '../components/Avatar'
 import LiveComments from '../components/LiveComments'
+import ShareLiveModal from '../components/ShareLiveModal'
 import { liveManager, type LiveSnapshot } from '../lib/live'
 import type { LiveSession } from '../lib/types'
 import { useAuth } from '../lib/auth-context'
@@ -14,6 +15,9 @@ export default function LiveView() {
   const { id } = useParams<{ id: string }>()
   const location = useLocation()
   const [snap, setSnap] = useState<LiveSnapshot>(liveManager.snapshot)
+  const [hearts, setHearts] = useState<{ id: number; x: number }[]>([])
+  const [shareOpen, setShareOpen] = useState(false)
+  const heartId = useRef(0)
 
   useEffect(() => liveManager.subscribe(setSnap), [])
 
@@ -40,17 +44,30 @@ export default function LiveView() {
     joinedRef.current = liveId
     const live = passedLive
     if (!live) {
-      // Try fetching from the list
-      void livesApi.list().then(({ lives }) => {
-        const found = lives.find((l) => l.id === liveId)
-        if (found) void liveManager.join(found)
-      })
+      // Join-by-link: resolve the live directly first, fall back to the directory.
+      void livesApi
+        .get(liveId)
+        .then(({ live }) => void liveManager.join(live))
+        .catch(() => {
+          void livesApi.list().then(({ lives }) => {
+            const found = lives.find((l) => l.id === liveId)
+            if (found) void liveManager.join(found)
+          })
+        })
       return
     }
     void liveManager.join(live)
   }, [liveId, passedLive, amHost, isViewing, snap.stage])
 
   const ended = snap.stage === 'ended' || (snap.live?.id === liveId && snap.stage === 'idle' && !amHost)
+
+  const like = (e?: { clientX?: number }) => {
+    liveManager.sendLike()
+    const x = (e?.clientX ?? window.innerWidth / 2) + (Math.random() * 40 - 20)
+    const n = ++heartId.current
+    setHearts((cur) => [...cur, { id: n, x }])
+    setTimeout(() => setHearts((cur) => cur.filter((h) => h.id !== n)), 1500)
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-gradient-to-br from-rose-500 via-pink-500 to-fuchsia-500">
@@ -75,15 +92,35 @@ export default function LiveView() {
           </div>
         )}
 
-        <div className="ml-auto flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-semibold text-white backdrop-blur-sm">
-          <Radio className="h-3 w-3 animate-pulse" />
-          <Users className="h-3 w-3" />
-          {snap.viewers}
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={() => like()}
+            aria-label="Like this live"
+            className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-semibold text-white backdrop-blur-sm transition hover:bg-white/30"
+          >
+            <Heart className="h-3.5 w-3.5 text-pink-200" />
+            {snap.likes}
+          </button>
+          <div className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-semibold text-white backdrop-blur-sm">
+            <Radio className="h-3 w-3 animate-pulse" />
+            <Users className="h-3 w-3" />
+            {snap.viewers}
+          </div>
+          <button
+            onClick={() => setShareOpen(true)}
+            aria-label="Share live"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-sm transition hover:bg-white/30"
+          >
+            <Share2 className="h-4 w-4" />
+          </button>
         </div>
       </div>
 
-      {/* main content */}
-      <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center">
+      {/* main content — double-tap anywhere to like */}
+      <div
+        onDoubleClick={like}
+        className="relative flex min-h-0 flex-1 flex-col items-center justify-center"
+      >
         {(amHost || isViewing) && snap.remoteStream && (
           <MediaVideo stream={snap.remoteStream} className="absolute inset-0 h-full w-full object-cover" muted />
         )}
@@ -117,6 +154,17 @@ export default function LiveView() {
             </button>
           </div>
         )}
+
+        {/* heart burst on like */}
+        {hearts.map((h) => (
+          <span
+            key={h.id}
+            className="live-heart pointer-events-none absolute z-20"
+            style={{ left: h.x, bottom: '42%' }}
+          >
+            <Heart className="h-16 w-16 fill-rose-400 text-rose-400 drop-shadow-lg" />
+          </span>
+        ))}
       </div>
 
       {/* notice toast */}
@@ -130,6 +178,11 @@ export default function LiveView() {
 
       {/* live comments */}
       {!ended && (amHost || isViewing) && <LiveComments />}
+
+      {/* share modal */}
+      {shareOpen && snap.live && (
+        <ShareLiveModal liveId={liveId} title={snap.live.title} onClose={() => setShareOpen(false)} />
+      )}
 
       {/* bottom controls */}
       {!ended && (amHost || isViewing) && (

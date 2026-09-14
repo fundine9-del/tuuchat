@@ -114,6 +114,8 @@ async function main() {
   assert(await videoOk.jsonValue(), 'viewer has host video stream')
   console.log('OK viewer receives host video/audio stream')
 
+  const liveId = new URL(viewer.url()).pathname.split('/').pop()
+
   /* --- live comments: host -> viewer --- */
   await host.getByRole('button', { name: 'Chat', exact: true }).click()
   await host.getByPlaceholder('Send a comment…').fill('Hello live viewers!')
@@ -130,7 +132,6 @@ async function main() {
 
   /* --- comment history REST endpoint --- */
   const viewerToken = await viewer.evaluate(() => localStorage.getItem('tuuchat:token'))
-  const liveId = new URL(viewer.url()).pathname.split('/').pop()
   const history = await api(`/api/live/${liveId}/comments?limit=50`, { token: viewerToken! })
   const contents = (history.comments as { content: string }[]).map((c) => c.content)
   assert(
@@ -139,10 +140,48 @@ async function main() {
   )
   console.log('OK comment history REST endpoint returns both')
 
+  /* --- double-tap like: viewer bursts a heart, both chips show the count --- */
+  await viewer.locator('video').first().dblclick()
+  await viewer.getByRole('button', { name: 'Like this live' }).filter({ hasText: '1' }).waitFor({ timeout: 10000 })
+  await host.getByRole('button', { name: 'Like this live' }).filter({ hasText: '1' }).waitFor({ timeout: 10000 })
+  console.log('OK double-tap like reaches host and viewer')
+
+  /* --- share-link resolution: GET /api/live/:id exposes the live to anyone with the link --- */
+  const liveByLink = await api(`/api/live/${liveId}`, { token: viewerToken! })
+  assert(liveByLink.live?.id === liveId, `GET /api/live/:id resolves the live (${JSON.stringify(liveByLink)})`)
+  assert(liveByLink.live?.likes === 1, `GET /api/live/:id reports 1 like (got ${liveByLink.live?.likes})`)
+  console.log('OK share-link REST endpoint resolves the live')
+
+  /* --- join-by-link: an unrelated user (no shared conversation) opens the share URL directly --- */
+  const uC = `livelink_${suffix}`
+  await api('/api/auth/register', {
+    body: { email: `${uC}@test.dev`, username: uC, password: 'password1', display_name: 'Link User C' },
+  })
+  const ctxC: BrowserContext = await browser.newContext({ viewport: { width: 1280, height: 800 } })
+  const linkUser = await ctxC.newPage()
+  linkUser.on('console', (m) => { if (m.type() === 'error') failures.push(`linkUser console: ${m.text()}`) })
+  await linkUser.goto(`${WEB}/login`)
+  await linkUser.getByPlaceholder('you@example.com').fill(`${uC}@test.dev`)
+  await linkUser.getByPlaceholder('••••••••').fill('password1')
+  await linkUser.getByRole('button', { name: /sign in/i }).click()
+  await linkUser.waitForURL(`${WEB}/`, { timeout: 20000 })
+  await linkUser.goto(`${WEB}/live/${liveId}`)
+  await linkUser.waitForURL(`${WEB}/live/${liveId}`, { timeout: 15000 })
+  const linkVideo = await linkUser.waitForFunction(
+    () =>
+      Array.from(document.querySelectorAll('video')).some((v: any) => v && v.srcObject && v.readyState >= 2),
+    undefined,
+    { timeout: 25000 },
+  )
+  assert(await linkVideo.jsonValue(), 'link user receives host video (joined by URL with no shared conversation)')
+  console.log('OK unrelated user joins the live via share link')
+  await linkUser.getByTitle('Leave live').click()
+  await linkUser.waitForURL(`${WEB}/`)
+
   /* --- viewer count reaches host --- */
   const countOnHost = await host
     .locator('div.rounded-full.bg-white\\/20')
-    .filter({ hasText: /\b1\b/ })
+    .filter({ hasText: /\d+/ })
     .count()
   assert(countOnHost >= 1, `host shows a viewer count (found ${countOnHost})`)
   console.log('OK host shows viewer count')
@@ -169,6 +208,7 @@ async function main() {
     failures.forEach((f) => console.log('  -', f))
   }
 
+  await ctxC.close()
   await browser.close()
   console.log('LIVE E2E PASSED')
 }

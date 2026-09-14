@@ -139,6 +139,13 @@ export interface LiveSession {
     avatar_url: string | null
   }
   viewer_count: number
+  likes: number
+}
+
+export interface LiveLikes {
+  liveId: string
+  likes: number
+  by?: string
 }
 
 export interface LiveComment {

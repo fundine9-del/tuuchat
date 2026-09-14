@@ -160,6 +160,7 @@ export const statusesApi = {
 
 export const livesApi = {
   list: () => request<{ lives: LiveSession[] }>('/api/live'),
+  get: (id: string) => request<{ live: LiveSession }>(`/api/live/${id}`),
   start: (title: string) =>
     request<{ live: LiveSession }>('/api/live/start', { method: 'POST', body: { title } }),
   end: (id: string) => request<{ ended: string }>(`/api/live/${id}/end`, { method: 'POST' }),

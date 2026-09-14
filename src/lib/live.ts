@@ -17,6 +17,7 @@ export interface LiveSnapshot {
   localStream: MediaStream | null
   remoteStream: MediaStream | null
   viewers: number
+  likes: number
   comments: LiveComment[]
   notice: string | null
 }
@@ -28,6 +29,7 @@ function idleSnapshot(): LiveSnapshot {
     localStream: null,
     remoteStream: null,
     viewers: 0,
+    likes: 0,
     comments: [],
     notice: null,
   }
@@ -86,6 +88,11 @@ class LiveManager {
       this.mutate({ comments: [...this.state.comments, comment] })
     })
 
+    subscribe('liveLikes', (l) => {
+      if (this.state.live?.id !== l.liveId) return
+      this.mutate({ likes: l.likes })
+    })
+
     subscribe('liveEnded', ({ liveId }) => {
       if (this.state.live?.id !== liveId) return
       if (this.state.stage === 'watching' || this.state.stage === 'joining') {
@@ -134,7 +141,7 @@ class LiveManager {
         this.setNotice('Could not start your live')
         return null
       }
-      this.mutate({ stage: 'live', live, localStream: local, viewers: 0, comments: [] })
+      this.mutate({ stage: 'live', live, localStream: local, viewers: 0, likes: 0, comments: [] })
       return live
     } catch {
       this.setNotice('Could not access camera / microphone')
@@ -181,7 +188,7 @@ class LiveManager {
 
   async join(live: LiveSession) {
     if (this.state.stage !== 'idle' && this.state.stage !== 'ended') return
-    this.mutate({ stage: 'joining', live, remoteStream: null, viewers: live.viewer_count, comments: [] })
+    this.mutate({ stage: 'joining', live, remoteStream: null, viewers: live.viewer_count, likes: live.likes ?? 0, comments: [] })
     void this.loadComments()
     try {
       const pc = new RTCPeerConnection(RTC_CONFIG)
@@ -240,6 +247,12 @@ class LiveManager {
     const live = this.state.live
     if (!text || !live || (this.state.stage !== 'live' && this.state.stage !== 'watching')) return
     emitLive('live:comment', { liveId: live.id, content: text })
+  }
+
+  sendLike() {
+    const live = this.state.live
+    if (!live || (this.state.stage !== 'live' && this.state.stage !== 'watching')) return
+    emitLive('live:like', { liveId: live.id })
   }
 
   async loadComments() {

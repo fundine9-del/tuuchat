@@ -22,3 +22,25 @@
 .live-comment-bubble {
   animation: live-comment-in 8s ease-out forwards;
 }
+
+@keyframes live-heart-in {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 16px) scale(0.4);
+  }
+  18% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1.25);
+  }
+  40% {
+    transform: translate(-50%, -8px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -88px) scale(1);
+  }
+}
+
+.live-heart {
+  animation: live-heart-in 1.4s ease-out forwards;
+}
