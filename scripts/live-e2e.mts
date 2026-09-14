@@ -115,13 +115,15 @@ async function main() {
   console.log('OK viewer receives host video/audio stream')
 
   /* --- live comments: host -> viewer --- */
-  await host.getByPlaceholder('Say something…').fill('Hello live viewers!')
+  await host.getByRole('button', { name: 'Chat', exact: true }).click()
+  await host.getByPlaceholder('Send a comment…').fill('Hello live viewers!')
   await host.getByRole('button', { name: 'Send comment' }).click()
   await viewer.getByText('Hello live viewers!').waitFor({ timeout: 10000 })
   console.log('OK viewer sees host comment')
 
   /* --- live comments: viewer -> host --- */
-  await viewer.getByPlaceholder('Say something…').fill('Hey host! 👋')
+  await viewer.getByRole('button', { name: 'Chat', exact: true }).click()
+  await viewer.getByPlaceholder('Send a comment…').fill('Hey host! 👋')
   await viewer.getByRole('button', { name: 'Send comment' }).click()
   await host.getByText('Hey host! 👋').waitFor({ timeout: 10000 })
   console.log('OK host sees viewer comment')

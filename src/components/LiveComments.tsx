@@ -1,19 +1,55 @@
 import { useEffect, useRef, useState } from 'react'
-import { Send } from 'lucide-react'
-import Avatar from './Avatar'
+import { MessageSquare, Send, X } from 'lucide-react'
 import { liveManager, type LiveSnapshot } from '../lib/live'
+import type { LiveComment } from '../lib/types'
+
+const FADE_MS = 8000
+const MAX_BUBBLES = 12
 
 export default function LiveComments() {
   const [snap, setSnap] = useState<LiveSnapshot>(liveManager.snapshot)
   useEffect(() => liveManager.subscribe(setSnap), [])
-  const [text, setText] = useState('')
-  const listRef = useRef<HTMLDivElement | null>(null)
-  const stickToBottom = useRef(true)
 
+  const [chatOpen, setChatOpen] = useState(false)
+  const [text, setText] = useState('')
+  const [visible, setVisible] = useState<LiveComment[]>([])
+  const visibleRef = useRef(visible)
+  useEffect(() => { visibleRef.current = visible })
+  const lastComments = useRef<LiveComment[]>([])
+  const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
+
+  // Track newly arrived comments and float them over the video.
   useEffect(() => {
-    const el = listRef.current
-    if (el && stickToBottom.current) el.scrollTop = el.scrollHeight
-  }, [snap.comments.length])
+    const prev = lastComments.current
+    lastComments.current = snap.comments
+    const prevIds = new Set(prev.map((c) => c.id))
+    const fresh = snap.comments.filter((c) => !prevIds.has(c.id))
+    if (fresh.length === 0) return
+
+    let next = [...visibleRef.current]
+    for (const c of fresh) {
+      if (next.some((x) => x.id === c.id)) continue
+      next.push(c)
+      const id = c.id
+      timers.current.set(
+        id,
+        setTimeout(() => {
+          timers.current.delete(id)
+          setVisible((cur) => cur.filter((x) => x.id !== id))
+        }, FADE_MS),
+      )
+    }
+    if (next.length > MAX_BUBBLES) next = next.slice(-MAX_BUBBLES)
+    setVisible(next)
+  }, [snap.comments])
+
+  useEffect(
+    () => () => {
+      timers.current.forEach((t) => clearTimeout(t))
+      timers.current.clear()
+    },
+    [],
+  )
 
   const send = () => {
     const value = text.trim()
@@ -23,59 +59,64 @@ export default function LiveComments() {
   }
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-24 z-10 flex justify-center px-4">
-      <div className="pointer-events-auto flex h-[35vh] max-h-72 w-full max-w-md flex-col overflow-hidden rounded-2xl border border-white/15 bg-black/35 shadow-xl backdrop-blur-xl">
-        <div className="flex items-center gap-2 px-4 py-2.5">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-rose-400" />
-          <p className="text-xs font-bold uppercase tracking-wide text-white/80">Live chat</p>
-          <span className="ml-auto text-[11px] text-white/50">{snap.comments.length}</span>
-        </div>
-
-        <div
-          ref={listRef}
-          onScroll={(e) => {
-            const el = e.currentTarget
-            stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40
-          }}
-          className="flex-1 space-y-2.5 overflow-y-auto px-4 pb-2.5"
-        >
-          {snap.comments.length === 0 && (
-            <p className="pt-3 text-center text-xs text-white/40">No comments yet — say hi!</p>
-          )}
-          {snap.comments.map((c) => (
-            <div key={c.id} className="flex items-start gap-2">
-              <div className="mt-0.5 shrink-0">
-                <Avatar name={c.displayName} src={c.avatarUrl} size={20} showStatus={false} />
-              </div>
-              <div className="min-w-0">
-                <span className="text-[11px] font-semibold text-pink-200">{c.displayName}</span>{' '}
-                <span className="break-words text-[13px] leading-snug text-white/95">{c.content}</span>
-              </div>
-            </div>
+    <>
+      {visible.length > 0 && (
+        <div className="pointer-events-none absolute bottom-28 left-3 z-10 flex flex-col items-start gap-1.5 max-w-[260px]">
+          {visible.map((c) => (
+            <span
+              key={c.id}
+              className="live-comment-bubble max-w-full truncate rounded-full border border-white/10 bg-black/40 px-3 py-1.5 text-xs text-white/95 shadow-lg backdrop-blur-sm"
+            >
+              <span className="font-semibold text-pink-200">{c.displayName} </span>
+              {c.content}
+            </span>
           ))}
         </div>
+      )}
 
-        <div className="flex items-center gap-2 border-t border-white/10 p-2.5">
-          <input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') send()
-            }}
-            maxLength={500}
-            placeholder="Say something…"
-            className="flex-1 rounded-full bg-white/15 px-3.5 py-2 text-sm text-white placeholder-white/40 outline-none focus:bg-white/20"
-          />
-          <button
-            onClick={send}
-            disabled={!text.trim()}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-pink-500 text-white shadow-lg transition hover:bg-pink-400 disabled:opacity-40"
-            aria-label="Send comment"
-          >
-            <Send className="h-4 w-4" />
-          </button>
+      {/* chat toggle */}
+      <button
+        onClick={() => setChatOpen((o) => !o)}
+        aria-label="Chat"
+        className="absolute right-3 top-16 z-10 flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm transition hover:bg-white/30"
+      >
+        <MessageSquare className="h-4 w-4" />
+        {snap.comments.length > 0 && <span>{snap.comments.length}</span>}
+      </button>
+
+      {/* compact input bar */}
+      {chatOpen && (
+        <div className="absolute inset-x-0 bottom-24 z-20 flex justify-center px-4">
+          <div className="flex w-full max-w-md items-center gap-2 rounded-full border border-white/15 bg-black/45 p-2 shadow-xl backdrop-blur-xl">
+            <input
+              autoFocus
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') send()
+              }}
+              maxLength={500}
+              placeholder="Send a comment…"
+              className="min-w-0 flex-1 bg-transparent px-2.5 text-sm text-white placeholder-white/50 outline-none"
+            />
+            <button
+              onClick={send}
+              disabled={!text.trim()}
+              aria-label="Send comment"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-pink-500 text-white shadow-lg transition hover:bg-pink-400 disabled:opacity-40"
+            >
+              <Send className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => setChatOpen(false)}
+              aria-label="Close chat"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white/60 transition hover:text-white"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
-      </div>
-    </div>
+      )}
+    </>
   )
 }
