@@ -78,8 +78,12 @@ async function main() {
   }
   await page.getByText('hello from rest!', { exact: true }).last().waitFor()
   await composer.fill('web ui message')
+  const sendResp = page.waitForResponse(
+    (r) => r.request().method() === 'POST' && /\/api\/conversations\/[^/]+\/messages$/.test(r.url()),
+  )
   await composer.press('Enter')
   await page.getByText('web ui message', { exact: true }).last().waitFor()
+  await sendResp // ensure the message reached the server before navigating/reloading
   console.log('OK chat opened + message sent via UI')
 
   /* --- reload keeps messages --- */
@@ -114,7 +118,7 @@ async function main() {
 
   /* --- profile flow --- */
   await page.goto(`${WEB}/profile`)
-  await page.getByText('Profile', { exact: true }).waitFor()
+  await page.getByRole('heading', { name: 'Profile' }).waitFor()
   const nameInput = page.getByPlaceholder('Tell people about yourself…')
   await nameInput.fill('E2E bio here')
   const displayInput = page.locator('main form input')

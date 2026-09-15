@@ -1,4 +1,13 @@
 import type { Conversation, LastMessage, LiveComment, LiveSession, Message, Participant, Status, User, UserStatus } from './types'
+import {
+  chatCache,
+  noteMessageCache,
+  noteStatusCache,
+  removeMessageCache,
+  removeStatusCache,
+  swr,
+  updateMessageCache,
+} from './cache'
 
 export const API_BASE =
   (import.meta.env.VITE_API_URL as string | undefined) ?? 'https://tuuchat-server-production.up.railway.app'
@@ -95,22 +104,39 @@ export const usersApi = {
 
 /* ---------------------------- conversations --------------------------- */
 
+// TTLs (ms): how long a cached snapshot is served without re-fetching.
+const TTL_CONVERSATIONS = 60_000
+const TTL_CONVERSATION = 120_000
+const TTL_MESSAGES = 60_000
+const TTL_STATUSES = 120_000
+
 export const conversationsApi = {
-  list: () => request<{ conversations: Conversation[] }>('/api/conversations'),
-  get: async (id: string) => {
-    const res = await request<{ conversation: Conversation; participants: (Participant & { user_id: string })[] }>(`/api/conversations/${id}`)
-    return { ...res, conversation: { ...res.conversation, participants: res.participants } }
-  },
-  create: (data: { type: 'direct' | 'group'; user_ids: string[]; name?: string }) =>
-    request<{ conversation: Conversation; duplicate?: boolean }>('/api/conversations', {
+  list: () =>
+    swr('conv:list', TTL_CONVERSATIONS, () =>
+      request<{ conversations: Conversation[] }>('/api/conversations'),
+    ),
+  get: (id: string) =>
+    swr(`conv:${id}`, TTL_CONVERSATION, async () => {
+      const res = await request<{ conversation: Conversation; participants: (Participant & { user_id: string })[] }>(`/api/conversations/${id}`)
+      return { ...res, conversation: { ...res.conversation, participants: res.participants } }
+    }),
+  create: async (data: { type: 'direct' | 'group'; user_ids: string[]; name?: string }) => {
+    const res = await request<{ conversation: Conversation; duplicate?: boolean }>('/api/conversations', {
       method: 'POST',
       body: data,
-    }),
-  addParticipants: (id: string, user_ids: string[]) =>
-    request<{ added: string[] }>(`/api/conversations/${id}/participants`, {
+    })
+    await chatCache.invalidateConversationList()
+    return res
+  },
+  addParticipants: async (id: string, user_ids: string[]) => {
+    const res = await request<{ added: string[] }>(`/api/conversations/${id}/participants`, {
       method: 'POST',
       body: { user_ids },
-    }),
+    })
+    await chatCache.invalidateConversationList()
+    await chatCache.invalidateConversation(id)
+    return res
+  },
   typing: (id: string, isTyping: boolean) =>
     request<{ ok: boolean }>(`/api/conversations/${id}/typing`, { method: 'POST', body: { is_typing: isTyping } }),
 }
@@ -127,22 +153,34 @@ export const messagesApi = {
     const q = new URLSearchParams()
     if (opts.limit) q.set('limit', String(opts.limit))
     if (opts.before) q.set('before', opts.before)
-    return request<MessagesPage>(`/api/conversations/${conversationId}/messages?${q}`)
+    const path = `/api/conversations/${conversationId}/messages?${q}`
+    if (opts.before) return request<MessagesPage>(path)
+    return swr(`msgs:${conversationId}`, TTL_MESSAGES, () => request<MessagesPage>(path))
   },
-  send: (
+  send: async (
     conversationId: string,
     data: { content: string; message_type?: 'text' | 'image' | 'file'; reply_to_id?: string },
-  ) =>
-    request<{ message: Message & { sender_name: string; sender_avatar: string | null } }>(
+  ) => {
+    const res = await request<{ message: Message & { sender_name: string; sender_avatar: string | null } }>(
       `/api/conversations/${conversationId}/messages`,
       { method: 'POST', body: data },
-    ),
-  update: (messageId: string, content: string) =>
-    request<{ message: Message & { sender_name: string; sender_avatar: string | null } }>(
+    )
+    await noteMessageCache(res.message)
+    return res
+  },
+  update: async (messageId: string, content: string) => {
+    const res = await request<{ message: Message & { sender_name: string; sender_avatar: string | null } }>(
       `/api/messages/${messageId}`,
       { method: 'PATCH', body: { content } },
-    ),
-  del: (messageId: string) => request<{ deleted: string }>(`/api/messages/${messageId}`, { method: 'DELETE' }),
+    )
+    await updateMessageCache(res.message)
+    return res
+  },
+  del: async (messageId: string, conversationId?: string) => {
+    const res = await request<{ deleted: string }>(`/api/messages/${messageId}`, { method: 'DELETE' })
+    if (conversationId) await removeMessageCache(conversationId, messageId)
+    return res
+  },
 }
 
 export type { LastMessage }
@@ -150,10 +188,18 @@ export type { LastMessage }
 /* ------------------------------ statuses ------------------------------ */
 
 export const statusesApi = {
-  list: () => request<{ statuses: Status[] }>('/api/statuses'),
-  create: (content: string) =>
-    request<{ status: Status }>('/api/statuses', { method: 'POST', body: { content } }),
-  del: (id: string) => request<{ deleted: string }>(`/api/statuses/${id}`, { method: 'DELETE' }),
+  list: () =>
+    swr('statuses', TTL_STATUSES, () => request<{ statuses: Status[] }>('/api/statuses')),
+  create: async (content: string) => {
+    const res = await request<{ status: Status }>('/api/statuses', { method: 'POST', body: { content } })
+    await noteStatusCache(res.status)
+    return res
+  },
+  del: async (id: string) => {
+    const res = await request<{ deleted: string }>(`/api/statuses/${id}`, { method: 'DELETE' })
+    await removeStatusCache(id)
+    return res
+  },
 }
 
 /* -------------------------------- live -------------------------------- */

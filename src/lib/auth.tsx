@@ -4,6 +4,7 @@ import { authApi, setToken } from './api'
 import { connectSocket, disconnectSocket } from './socket'
 import type { User } from './types'
 import { AuthContext, TOKEN_KEY, USER_KEY } from './auth-context'
+import { chatCache } from './cache'
 
 function readStoredUser(): User | null {
   try {
@@ -39,6 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setTok(null)
             setUser(null)
             disconnectSocket()
+            void chatCache.clear()
           }
         }
       }
@@ -84,6 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
     localStorage.removeItem(TOKEN_KEY)
     localStorage.removeItem(USER_KEY)
+    void chatCache.clear()
   }, [])
 
   const updateUser = useCallback((u: User) => {

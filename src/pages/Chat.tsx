@@ -302,7 +302,7 @@ function ChatInner({ conversationId }: { conversationId: string }) {
     const ok = window.confirm(content ? `Delete this message?\n\n“${content.slice(0, 120)}”` : 'Delete this message?')
     if (!ok) return
     try {
-      await messagesApi.del(messageId)
+      await messagesApi.del(messageId, id)
       setMessages((prev) => prev.filter((x) => x.id !== messageId))
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Failed to delete')

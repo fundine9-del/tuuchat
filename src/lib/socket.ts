@@ -1,6 +1,7 @@
 import { io, Socket } from 'socket.io-client'
 import { API_BASE } from './api'
 import { setPresence } from './presence'
+import { chatCache } from './cache'
 import type {
   CallIce,
   CallInitiate,
@@ -99,6 +100,14 @@ export function connectSocket(token: string) {
   socket.on('presence:update', (d: PresenceUpdate) => {
     setPresence(d.userId, d.status)
     dispatch('presence', d)
+  })
+  // On (re)connect the cache may have gone stale (missed events / other devices):
+  // drop cached snapshots now, then nudge the sidebar so it refetches once.
+  socket.on('connect', () => {
+    void chatCache.invalidateConversationList()
+    void chatCache.invalidateMessagesAll()
+    void chatCache.invalidateStatuses()
+    dispatch('conversations', { conversationId: '' })
   })
   socket.on('message:new', (m: Message) => dispatch('message', m))
   socket.on('message:update', (m: Message) => dispatch('messageUpdated', m))
